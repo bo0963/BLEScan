@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.ScanResult;
 import android.content.BroadcastReceiver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -56,7 +57,7 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
     private ScanResult mScanResult;
     private boolean hasBlePermission;
     private String deviceMessage;
-    private TextView mTimerTextView, mDeviceNameTextView, mExperimentTextView;
+    private TextView mTimerTextView, mDeviceNameTextView, mExperimentTextView , mTimeTextView;
     private final String TAG = getClass().getSimpleName();
     private final int MY_PERMISSIONS_REQUEST_ACCESS_FINE_LOCATION = 11110;
     private boolean mScanning;
@@ -68,17 +69,17 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
     private static final int PERMISSION_REQUEST_CODE_WRITE_STORAGE = 2;
     private SimpleDateFormat mSimpleDateFormat = new SimpleDateFormat("yyyyMMddHHmm", Locale.getDefault());
     private SharedPreferences mSharedPreferences;
-    private Button mDbSelectButton, mDbOpenButton, mStarScanButton, mStopScanButton;
+    private Button mDbSelectButton, mDbOpenButton, mStarScanButton, mDoneButton;
     private BleBroadcastReceiver mBleBroadcastReceiver = new BleBroadcastReceiver();
 
-    private boolean mIsSampling;
-    private enum ScanningState {
-        STATE_IDLE,
-        STATE_STARTED,
-        STATE__STOP
-    }
-
-    private ScanningState mScanningState;
+//    private boolean mIsSampling;
+//    private enum ScanningState {
+//        STATE_IDLE,
+//        STATE_STARTED,
+//        STATE__STOP
+//    }
+//
+//    private ScanningState mScanningState;
 
     //@RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR2)
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
@@ -91,8 +92,9 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
         listView = findViewById(R.id.devicesListView);
         mSharedPreferences = getSharedPreferences(Constants.SHARED_PREFERENCES_KEY_DEVICE_NAME, Constants.SHARED_PREFERENCES_MODE);
         initializeUI();
-        mScanningState = ScanningState.STATE_IDLE;
-        refreshUI(mScanningState);
+
+//        mScanningState = ScanningState.STATE_IDLE;
+//        refreshUI(ScanningState.STATE_IDLE);
 
 //        // Initializes a Bluetooth adapter.  For API level 18 and above, get a reference to 初始化Bluetooth adapter
 //        // BluetoothAdapter through BluetoothManager.
@@ -122,10 +124,11 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
         mTimerTextView = findViewById(R.id.timerTextView);
         mDeviceNameTextView = findViewById(R.id.deviceNameTextView);
         mExperimentTextView = findViewById(R.id.experimentTextView);
+        mTimeTextView = findViewById(R.id.timeTextView);
         mDbSelectButton = findViewById(R.id.dbSelectButton);
         mDbOpenButton = findViewById(R.id.dbOpenButton);
         mStarScanButton = findViewById(R.id.startScanButton);
-        mStopScanButton = findViewById(R.id.stopScanButton);
+        mDoneButton = findViewById(R.id.doneButton);
 
         class TimerThread extends Thread {
             @RequiresApi(api = Build.VERSION_CODES.JELLY_BEAN_MR1)
@@ -154,12 +157,13 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
         }
         new TimerThread().start();
 
+        mExperimentTextView.setText(Constants.EXPERIMENT);
         mDeviceNameTextView.setText(mSharedPreferences.getString(Constants.SHARED_PREFERENCES_KEY_DEVICE_NAME, "裝置名稱"));
 
         mDbSelectButton.setOnClickListener(this);
         mDbOpenButton.setOnClickListener(this);
         mStarScanButton.setOnClickListener(this);
-        mStopScanButton.setOnClickListener(this);
+        mDoneButton.setOnClickListener(this);
     }
 
     @Override
@@ -174,8 +178,8 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
             case R.id.startScanButton:
                 onStartScanButtonClick();
                 break;
-            case R.id.stopScanButton:
-                scanLeDevice(false);
+            case R.id.doneButton:
+                onDoneButtonClick();
                 break;
         }
     }
@@ -379,6 +383,7 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
         //過濾dbNames
         final List<String> dbNameList = new ArrayList<>();
         for (String dbName : databaseList()) {
+            String[] tokens = dbName.split("-");
             if (!dbName.contains("-journal")) {
                 dbNameList.add(dbName);
             }
@@ -403,14 +408,15 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
                             }
 //                            mTimeTextView.setText(mSimpleDateFormat.format(new Date()));  // *注意* 此為實驗時間非實驗"持續"時間 因為layout未設此object所以不使用
                             mDeviceNameTextView.setText(editText.getText().toString());
+                            mTimeTextView.setText(mSimpleDateFormat.format(new Date()));
                             mSharedPreferences.edit().putString(Constants.SHARED_PREFERENCES_KEY_DEVICE_NAME, editText.getText().toString()).apply();
                         }
                     }).show();
 
                     //更新頁面
-//                    mTimeTextView.setText(mSimpleDateFormat.format(new Date()));  // *注意* 此為實驗時間非實驗"持續"時間 因為layout未設此object所以不使用
-                    mScanningState = ScanningState.STATE_IDLE;
-                    refreshUI(mScanningState);
+                    mTimeTextView.setText(mSimpleDateFormat.format(new Date()));  // *注意* 此為實驗時間非實驗"持續"時間 因為layout未設此object所以不使用
+//                    mScanningState = ScanningState.STATE_IDLE;
+//                    refreshUI(mScanningState);
                 } else {
                     //撈出舊資料 原本是要撈出 另外撰寫的Preferences的Table 因為沒有撰寫所以先使用原始資料庫 *注意*不確定能成功撈取
                     mbleBeaconDbHelper = new BleBeaconDbHelper(BleScanActivity.this, dbNameList.get(which));
@@ -420,10 +426,11 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
                     }
                     cursor.moveToLast();
                     String deviceName = cursor.getString(cursor.getColumnIndex(SqlContrack.BleBeaconEntry.COLUMN_NAME_DEVICE_NAME));
+                    String experimentTime = cursor.getString(cursor.getColumnIndex(SqlContrack.BleBeaconEntry.COLUMN_NAME_TIMESTAMP));
                     cursor.close();
 
                     //資料庫名稱
-//              mTimeTextView.setText(experimentTime);  // *注意* 此為實驗時間非實驗"持續"時間 因為layout未設此object所以不使用
+                    mTimeTextView.setText(experimentTime);  // *注意* 此為實驗時間非實驗"持續"時間 因為layout未設此object所以不使用
                     mDeviceNameTextView.setText(deviceName);
                 }
             }
@@ -432,6 +439,10 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
 
     private void onDbOpButtonClick() {
         String[] dbNameArray = databaseList();
+        if (mbleBeaconDbHelper == null){
+            snackBar("mBleDbHelper == null");
+            return;
+        }
 
         String dbName = mbleBeaconDbHelper.getDatabaseName();
         boolean isDbExist = false;
@@ -487,6 +498,21 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
 
     private void onStartScanButtonClick() {
         scanBleOnce();
+
+        //建立資料庫
+        mbleBeaconDbHelper = new BleBeaconDbHelper(BleScanActivity.this, mExperimentTextView.getText().toString()
+                + "-" + mTimeTextView.getText().toString()
+                + "-" + mDeviceNameTextView.getText().toString());
+
+//        ContentValues contentValues = new ContentValues();
+//        contentValues.put(SqlContrack.BleBeaconEntry.COLUMN_NAME_DEVICE_NAME, mleDeviceListAdapter.mLeDevices.toString());
+//        contentValues.put(SqlContrack.BleBeaconEntry.COLUMN_NAME_ADDRESS,);
+
+
+    }
+
+    private void onDoneButtonClick(){
+        scanLeDevice(false);
     }
 
     /**
@@ -502,7 +528,7 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
                         deleteDatabase(mbleBeaconDbHelper.getDatabaseName());
                         mbleBeaconDbHelper = null;
 
-                        mTimerTextView.setText(mSimpleDateFormat.format(new Date()));
+                        mTimeTextView.setText(mSimpleDateFormat.format(new Date()));
                         break;
                 }
             }
@@ -575,16 +601,16 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            mIsSampling =false;
-            refreshUI(mScanningState);
-
-            if (mScanningState == ScanningState.STATE_STARTED) {
-                scanBleOnce();
-            } else {
-                if (isRegistered) {
-                    unRegister();
-                }
-            }
+//            mIsSampling =false;
+//            refreshUI(mScanningState);
+//
+//            if (mScanningState == ScanningState.STATE_STARTED) {
+//                scanBleOnce();
+//            } else {
+//                if (isRegistered) {
+//                    unRegister();
+//                }
+//            }
         }
 
 
@@ -610,37 +636,41 @@ public class BleScanActivity extends AppCompatActivity implements View.OnClickLi
     }
 
 
-    private void refreshUI(ScanningState scanningState) {
-        switch (scanningState) {
-            case STATE_IDLE:
-            case STATE_STARTED:
-                mStopScanButton.setEnabled(true);
-                mStarScanButton.setEnabled(false);
-                mDbSelectButton.setEnabled(false);
-                mDbOpenButton.setEnabled(false);
-                break;
-            case STATE__STOP:
-                if (mIsSampling){
-                    mDbSelectButton.setEnabled(false);
-                    mDbOpenButton.setEnabled(false);
-                    mStarScanButton.setEnabled(false);
-                    mStopScanButton.setEnabled(false);
-                }else {
-                    mStopScanButton.setEnabled(false);
-                    mStarScanButton.setEnabled(false);
-                    mDbSelectButton.setEnabled(true);
-                    mDbOpenButton.setEnabled(true);
-                }
-                break;
-        }
-    }
+//    private void refreshUI(ScanningState scanningState) {
+//        switch (scanningState) {
+//            case STATE_IDLE:
+//                mStarScanButton.setEnabled(true);
+//                mStopScanButton.setEnabled(false);
+//                mDbOpenButton.setEnabled(false);
+//                mDbSelectButton.setEnabled(false);
+//            case STATE_STARTED:
+//                mStopScanButton.setEnabled(true);
+//                mStarScanButton.setEnabled(false);
+//                mDbSelectButton.setEnabled(false);
+//                mDbOpenButton.setEnabled(false);
+//                break;
+//            case STATE__STOP:
+//                if (mIsSampling){
+//                    mDbSelectButton.setEnabled(false);
+//                    mDbOpenButton.setEnabled(false);
+//                    mStarScanButton.setEnabled(false);
+//                    mStopScanButton.setEnabled(false);
+//                }else {
+//                    mStopScanButton.setEnabled(false);
+//                    mStarScanButton.setEnabled(false);
+//                    mDbSelectButton.setEnabled(true);
+//                    mDbOpenButton.setEnabled(true);
+//                }
+//                break;
+//        }
+//    }
 
     //    -----------------------------------------------------------Snackbar method--------------------------------------------------------------------
     private void snackBar(final String message) {
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                Snackbar.make(findViewById(R.id.layout), message, Snackbar.LENGTH_SHORT).show();
+                Snackbar.make(findViewById(R.id.activity_bleScan), message, Snackbar.LENGTH_SHORT).show();
             }
         });
     }
